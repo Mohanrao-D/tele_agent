@@ -221,15 +221,28 @@ async def handler_bot_messages(event):
 async def handler_global_messages(event):
     """Global handler that filters source-channel posts and bot messages, never crashing the loop."""
     try:
+        # Check if the message is from our source channel
+        # We compare both the raw event.chat_id and the cleaned ID (removing -100 prefix if present)
+        event_raw_id = abs(event.chat_id)
+        clean_chat_id = event_raw_id
+        if str(event_raw_id).startswith('100'):
+            try:
+                clean_chat_id = int(str(event_raw_id)[3:])
+            except Exception:
+                pass
+
+        if SOURCE_ENTITY_ID and (event.chat_id == SOURCE_ENTITY_ID or clean_chat_id == SOURCE_ENTITY_ID):
+            logger.info("New message received in source channel.")
+            await process_message(event.message)
+            return
+
+        # If not the source channel, check if it's from the bot
         sender = await event.get_sender()
         if not sender:
             return
         username = (getattr(sender, 'username', '') or '').lower()
 
-        if SOURCE_ENTITY_ID and event.chat_id == SOURCE_ENTITY_ID:
-            logger.info("New message received in source channel.")
-            await process_message(event.message)
-        elif username == 'markscans_bot':
+        if username == 'markscans_bot':
             logger.info("Intercepted message from @Markscans_bot globally.")
             await handler_bot_messages(event)
     except Exception as e:
